@@ -234,7 +234,7 @@ def pctfmt(v):
 # ----------------------------------------------------------------------
 # HEADER
 # ----------------------------------------------------------------------
-st.markdown(f"<div class='schedule-ref'>DISCOUNTED CASH FLOW — WORK PAPER</div>", unsafe_allow_html=True)
+st.markdown(f"<div class='schedule-ref'>DISCOUNTED CASH FLOW </div>", unsafe_allow_html=True)
 st.session_state.project_name = st.text_input("Project name", st.session_state.project_name, label_visibility="collapsed")
 st.markdown(
     f"<div style='color:{INK_SOFT};font-family:IBM Plex Mono,monospace;font-size:12px;'>"
