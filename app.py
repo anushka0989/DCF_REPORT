@@ -66,7 +66,7 @@ def typed_input(label, value, key, help=None):
         return value
     return parsed
 
-st.set_page_config(page_title="DCF Engine — Work Paper", layout="wide")
+st.set_page_config(page_title="DCF Engine", layout="wide")
 
 st.markdown(
     f"""
