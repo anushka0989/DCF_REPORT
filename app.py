@@ -42,6 +42,30 @@ def convert_rate(value, from_unit, to_unit):
         return value
     return value * SQM_TO_SQFT if to_unit == "sqm" else value / SQM_TO_SQFT
 
+
+def parse_typed_number(text):
+    """Parses a plain-typed number (commas/₹ allowed). Returns (value, is_valid).
+    An empty field is treated as 0, not an error."""
+    cleaned = str(text).replace(",", "").replace("₹", "").strip()
+    if cleaned == "":
+        return 0.0, True
+    try:
+        return float(cleaned), True
+    except ValueError:
+        return None, False
+
+
+def typed_input(label, value, key, help=None):
+    """A purely-typed numeric field — no increment/decrement buttons, unlike st.number_input.
+    Falls back to the previous value (with an inline warning) if the typed text isn't a valid number."""
+    default_str = f"{value:,.2f}"
+    raw = st.text_input(label, value=default_str, key=key, help=help)
+    parsed, ok = parse_typed_number(raw)
+    if not ok:
+        st.caption(f":red[⚠ '{raw}' isn't a valid number — using {value:,.2f}]")
+        return value
+    return parsed
+
 st.set_page_config(page_title="DCF Engine — Work Paper", layout="wide")
 
 st.markdown(
@@ -251,10 +275,12 @@ if unit != st.session_state.area_unit_prev:
             wkey = f"{k}_{field}"
             if wkey in st.session_state:
                 converter = convert_area if field in area_fields else convert_rate
-                st.session_state[wkey] = converter(st.session_state[wkey], old_unit, unit)
+                numeric_val, _ = parse_typed_number(st.session_state[wkey])
+                st.session_state[wkey] = f"{converter(numeric_val or 0.0, old_unit, unit):,.2f}"
     for wkey, converter in [("land_area_widget", convert_area), ("land_rate_widget", convert_rate)]:
         if wkey in st.session_state:
-            st.session_state[wkey] = converter(st.session_state[wkey], old_unit, unit)
+            numeric_val, _ = parse_typed_number(st.session_state[wkey])
+            st.session_state[wkey] = f"{converter(numeric_val or 0.0, old_unit, unit):,.2f}"
     st.session_state.area_unit_prev = unit
 
 tenure = st.session_state.tenure
@@ -265,14 +291,14 @@ unit_label = UNIT_LABEL[unit]
 st.markdown(f"**Land Cost & Statutory** &nbsp;<span class='schedule-ref'>applies once, across every scenario — same site</span>", unsafe_allow_html=True)
 l1, l2, l3, l4, l5 = st.columns(5)
 with l1:
-    land_area_input = st.number_input(f"Land Area ({unit_label})",
-                                       value=convert_area(st.session_state.land_area, "sqft", unit),
-                                       step=100.0, key="land_area_widget")
+    land_area_input = typed_input(f"Land Area ({unit_label})",
+                                   convert_area(st.session_state.land_area, "sqft", unit),
+                                   key="land_area_widget")
     st.session_state.land_area = convert_area(land_area_input, unit, "sqft")
 with l2:
-    land_rate_input = st.number_input(f"Land Rate (₹/{unit_label})",
-                                       value=convert_rate(st.session_state.land_rate, "sqft", unit),
-                                       step=500.0, key="land_rate_widget")
+    land_rate_input = typed_input(f"Land Rate (₹/{unit_label})",
+                                   convert_rate(st.session_state.land_rate, "sqft", unit),
+                                   key="land_rate_widget")
     st.session_state.land_rate = convert_rate(land_rate_input, unit, "sqft")
 with l3:
     st.session_state.land_payment_year = st.number_input("Land Payment Year", min_value=0,
@@ -310,9 +336,7 @@ revenue share each year, or a one-time upfront premium in Year 1 — set per sce
 flow, NPV, and IRR are computed automatically; the Comparison tab ranks the three scenarios and lets you
 export the full audit schedule to Excel.
 
-*Figures are illustrative — replace the seeded defaults with values from your Knight Frank / Satguru
-valuation reports before relying on the output.*
-        """
+**Note:** This work paper is a simplified model for high-level feasibility analysis. It does not account"""
     )
 
 results = {}
@@ -325,21 +349,18 @@ for key, tab in scenario_tabs.items():
 
         with left:
             st.markdown(f"**Assumptions — {LABELS[key]}**")
-            area_input = st.number_input(f"Saleable Area ({unit_label})",
-                                          value=convert_area(float(sc["saleable_area"]), "sqft", unit),
-                                          step=1000.0 if unit == "sqft" else 100.0, key=f"{key}_area")
+            area_input = typed_input(f"Saleable Area ({unit_label})",
+                                      convert_area(float(sc["saleable_area"]), "sqft", unit), key=f"{key}_area")
             sc["saleable_area"] = convert_area(area_input, unit, "sqft")
 
-            rate_input = st.number_input(f"Sale Rate, Yr-1 (₹/{unit_label})",
-                                          value=convert_rate(float(sc["sale_rate"]), "sqft", unit),
-                                          step=100.0, key=f"{key}_rate")
+            rate_input = typed_input(f"Sale Rate, Yr-1 (₹/{unit_label})",
+                                      convert_rate(float(sc["sale_rate"]), "sqft", unit), key=f"{key}_rate")
             sc["sale_rate"] = convert_rate(rate_input, unit, "sqft")
 
             sc["price_escalation"] = st.number_input("Price Escalation (%/yr)", value=sc["price_escalation"], step=0.5, key=f"{key}_pesc")
 
-            ccost_input = st.number_input(f"Construction Cost (₹/{unit_label})",
-                                           value=convert_rate(float(sc["construction_cost"]), "sqft", unit),
-                                           step=100.0, key=f"{key}_ccost")
+            ccost_input = typed_input(f"Construction Cost (₹/{unit_label})",
+                                       convert_rate(float(sc["construction_cost"]), "sqft", unit), key=f"{key}_ccost")
             sc["construction_cost"] = convert_rate(ccost_input, unit, "sqft")
             sc["cost_escalation"] = st.number_input("Cost Escalation (%/yr)", value=sc["cost_escalation"], step=0.5, key=f"{key}_cesc")
             sc["construction_years"] = st.number_input("Construction Period (yrs)", min_value=1, value=int(sc["construction_years"]), step=1, key=f"{key}_cy")
@@ -353,41 +374,37 @@ for key, tab in scenario_tabs.items():
             if sc["authority_mode"] == "share":
                 sc["revenue_share_pct"] = st.number_input("Revenue Share to Authority (%)", value=sc["revenue_share_pct"], step=1.0, key=f"{key}_share")
             else:
-                sc["premium_amount"] = st.number_input("Upfront Premium, Yr-1 (₹ Cr)", value=sc["premium_amount"], step=5.0, key=f"{key}_premium")
+                sc["premium_amount"] = typed_input("Upfront Premium, Yr-1 (₹ Cr)", sc["premium_amount"], key=f"{key}_premium")
 
             st.markdown(f"**Previous Stakeholders — {LABELS[key]}**")
             st.caption("Existing allottees/lessees who surrender their current space and receive rehabilitation area at a concessional rate, separate from the market-rate sale above.")
 
-            rehab_area_input = st.number_input(f"Rehabilitation Area ({unit_label})",
-                                                value=convert_area(float(sc["rehab_area"]), "sqft", unit),
-                                                step=1000.0 if unit == "sqft" else 100.0, key=f"{key}_rehab_area")
+            rehab_area_input = typed_input(f"Rehabilitation Area ({unit_label})",
+                                            convert_area(float(sc["rehab_area"]), "sqft", unit), key=f"{key}_rehab_area")
             sc["rehab_area"] = convert_area(rehab_area_input, unit, "sqft")
 
-            rehab_rate_input = st.number_input(f"Rehabilitation Rate charged to Stakeholders (₹/{unit_label})",
-                                                value=convert_rate(float(sc["rehab_rate"]), "sqft", unit),
-                                                step=100.0, key=f"{key}_rehab_rate",
-                                                help="Set to 0 for free rehabilitation (typical of most schemes).")
+            rehab_rate_input = typed_input(f"Rehabilitation Rate charged to Stakeholders (₹/{unit_label})",
+                                            convert_rate(float(sc["rehab_rate"]), "sqft", unit), key=f"{key}_rehab_rate",
+                                            help="Set to 0 for free rehabilitation (typical of most schemes).")
             sc["rehab_rate"] = convert_rate(rehab_rate_input, unit, "sqft")
 
-            rehab_ccost_input = st.number_input(f"Rehabilitation Construction Cost (₹/{unit_label})",
-                                                 value=convert_rate(float(sc["rehab_construction_cost"]), "sqft", unit),
-                                                 step=100.0, key=f"{key}_rehab_ccost",
-                                                 help="Cost to build the rehabilitation area — defaults to the same rate as market construction, adjust if specification differs.")
+            rehab_ccost_input = typed_input(f"Rehabilitation Construction Cost (₹/{unit_label})",
+                                             convert_rate(float(sc["rehab_construction_cost"]), "sqft", unit), key=f"{key}_rehab_ccost",
+                                             help="Cost to build the rehabilitation area — defaults to the same rate as market construction, adjust if specification differs.")
             sc["rehab_construction_cost"] = convert_rate(rehab_ccost_input, unit, "sqft")
 
             sc["rehab_handover_year"] = st.number_input("Rehabilitation Handover Year", min_value=1,
                                                           value=int(sc["rehab_handover_year"]), step=1, key=f"{key}_rehab_year",
                                                           help="Year the rehabilitation revenue (if any) is recognised — usually at end of construction, ahead of market sales.")
-            sc["transit_compensation"] = st.number_input("One-time Transit/Shifting Compensation (₹ Cr)",
-                                                           value=sc["transit_compensation"], step=1.0, key=f"{key}_transit",
-                                                           help="Lump-sum paid to existing stakeholders for alternate accommodation during construction.")
+            sc["transit_compensation"] = typed_input("One-time Transit/Shifting Compensation (₹ Cr)",
+                                                       sc["transit_compensation"], key=f"{key}_transit",
+                                                       help="Lump-sum paid to existing stakeholders for alternate accommodation during construction.")
             sc["transit_year"] = st.number_input("Transit Compensation Year", min_value=0,
                                                   value=int(sc["transit_year"]), step=1, key=f"{key}_transit_year")
 
             st.markdown(f"**Other Revenue & Levies — {LABELS[key]}**")
-            sc["other_revenue"] = st.number_input("Other/Miscellaneous Revenue (₹ Cr)",
-                                                    value=sc["other_revenue"], step=0.5, key=f"{key}_otherrev",
-                                                    help="Car parking, amenity, or other saleable income not captured in the main sale rate above.")
+            sc["other_revenue"] = typed_input("Other/Miscellaneous Revenue (₹ Cr)", sc["other_revenue"], key=f"{key}_otherrev",
+                                               help="Car parking, amenity, or other saleable income not captured in the main sale rate above.")
             sc["other_revenue_year"] = st.number_input("Other Revenue — Year", min_value=1,
                                                          value=int(sc["other_revenue_year"]), step=1, key=f"{key}_otherrev_year")
             sc["gst_pct"] = st.number_input("GST / Statutory Levies (% of revenue)", min_value=0.0,
